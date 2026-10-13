@@ -42,13 +42,22 @@ static class Program
         GameDir = !File.Exists(Path.Combine(ModDir, OriginalExe)) && parent != null && File.Exists(Path.Combine(parent, OriginalExe))
             ? parent : ModDir;
 
+        Application.EnableVisualStyles();
+        if (!File.Exists(Path.Combine(GameDir, OriginalExe)))
+        {
+            MessageBox.Show("KKND Xtreme was not found.\n\n" +
+                "Put the KKNDHiResolutionMod folder inside your KKND Xtreme game folder, so that KKNDgame.exe " +
+                "is in the folder above it, and run KKNDHiResolutionMod.exe from there.",
+                "KKNDHiResolutionMod", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            return 1;
+        }
+
         Settings saved = Settings.Load();
         Size game;
         if (args.Length > 0 && args[0].Equals("-play", StringComparison.OrdinalIgnoreCase) &&
             saved != null && GameSize(saved.Resolution, saved.Scale, out game) == null)
             return Launch(game, saved.CenterMenus, null) ? 0 : 1;
 
-        Application.EnableVisualStyles();
         Application.Run(new LauncherForm(saved));
         return 0;
     }
@@ -147,7 +156,8 @@ static class Program
 
                 string dll = Path.Combine(ModDir, HookDll);
                 if (!File.Exists(dll))
-                    throw new Exception(HookDll + " is missing from the mod folder. Run build.cmd.");
+                    throw new Exception(HookDll + " was not found. It must be in the same folder as KKNDHiResolutionMod.exe: " +
+                                        "extract the whole KKNDHiResolutionMod folder from the download again (or run build.cmd when building from source).");
                 WriteIfChanged(Path.Combine(GameDir, HookDll), File.ReadAllBytes(dll));
                 exe = Path.Combine(GameDir, PatchedExe);
                 WriteIfChanged(exe, data);
@@ -204,7 +214,7 @@ class LauncherForm : Form
         string native = d.Width + "x" + d.Height;
 
         resCombo = new ComboBox { Location = new Point(12, 34), Width = 300, DropDownStyle = ComboBoxStyle.DropDown, MaxDropDownItems = 20 };
-        resCombo.Items.Add(native + "  (your screen)");
+        resCombo.Items.Add(native + "  (Primary Screen)");
         resCombo.Items.AddRange(Common.Where(c => c != native).ToArray());
         scaleCombo = new ComboBox { Location = new Point(322, 34), Width = 146, DropDownStyle = ComboBoxStyle.DropDownList };
         result = new Label { Location = new Point(12, 72), Size = new Size(456, 44) };

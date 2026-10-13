@@ -5,6 +5,8 @@ with menus centered on screen and videos scaled up to fit.
 
 ## Usage
 
+Step-by-step installation instructions for players, including troubleshooting, are in [INSTALL.md](INSTALL.md).
+
 1. Put this folder inside the game folder (`...\KKND Xtreme\KKNDHiResolutionMod\`).
 2. The release zip already contains `KKNDHiResolutionMod.exe` and `KKNDHiResolutionMod.dll`. When building
    from source, run `build.cmd` first. It needs Visual Studio's C++ tools (x86) for the DLL.

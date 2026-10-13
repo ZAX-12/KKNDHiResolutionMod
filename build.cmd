@@ -5,7 +5,7 @@ rem   KKNDHiResolutionMod.dll  - Visual Studio C++ tools (x86), found with vswhe
 rem
 rem   build.cmd           local build (uses the game's icon if it is in the parent folder)
 rem   build.cmd release   clean build without the game's icon, packaged as
-rem                       release\KKNDHiResolutionMod-%VERSION%.zip
+rem                       release\KKNDHiResolutionMod-%VERSION%.zip (only the exe and the DLL)
 setlocal
 cd /d "%~dp0"
 set VERSION=1.0.1
@@ -36,14 +36,9 @@ if not defined RELEASE exit /b 0
 rem Package: the zip holds one KKNDHiResolutionMod folder to extract into the game folder.
 set STAGE=release\stage\KKNDHiResolutionMod
 if exist release\stage rmdir /s /q release\stage
-mkdir "%STAGE%\src\dll" || exit /b 1
+mkdir "%STAGE%" || exit /b 1
 copy /y KKNDHiResolutionMod.exe "%STAGE%\" >nul || exit /b 1
 copy /y KKNDHiResolutionMod.dll "%STAGE%\" >nul || exit /b 1
-copy /y README.md "%STAGE%\" >nul || exit /b 1
-copy /y KKNDHiResolutionModLauncher.cs "%STAGE%\src\" >nul || exit /b 1
-copy /y build.cmd "%STAGE%\src\" >nul || exit /b 1
-copy /y dll\KKNDHiResolutionMod.c "%STAGE%\src\dll\" >nul || exit /b 1
-copy /y dll\KKNDHiResolutionMod.def "%STAGE%\src\dll\" >nul || exit /b 1
 set ZIP=release\KKNDHiResolutionMod-%VERSION%.zip
 if exist "%ZIP%" del "%ZIP%"
 rem Not Compress-Archive: Windows PowerShell 5.1 writes backslashes into zip entry names.
