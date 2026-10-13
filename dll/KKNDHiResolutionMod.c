@@ -377,6 +377,29 @@ FIT_STUB(stub_fit_42327E, 0x42327E, ecx)
 FIT_STUB(stub_fit_446ED0, 0x446ED0, eax)
 FIT_STUB(stub_fit_446D18, 0x446D18, edx)
 
+// Two sidebar objects (a slot at y=288 and its icon at y=312) are created with a
+// hard-coded x of 608/612, the sidebar column of the original 640x480 game, at
+// 0x401C8E/0x401CAC and 0x4210E5/0x421115. At any other resolution they float
+// in the middle of the battlefield. Place them relative to the view width like
+// the rest of the sidebar: width - 32 and width - 28.
+#define SIDEBAR_X_STUB(name, base, tmp, margin)   \
+    __declspec(naked) static void name(void)      \
+    {                                             \
+        __asm pushfd                              \
+        __asm push tmp                            \
+        __asm mov tmp, dword ptr ds:[0x478A8C]    \
+        __asm sub tmp, margin                     \
+        __asm shl tmp, 8                          \
+        __asm mov dword ptr [base + 0x10], tmp    \
+        __asm pop tmp                             \
+        __asm popfd                               \
+        __asm ret                                 \
+    }
+SIDEBAR_X_STUB(stub_x_401C8E, ebx, eax, 0x20)
+SIDEBAR_X_STUB(stub_x_401CAC, esi, eax, 0x1C)
+SIDEBAR_X_STUB(stub_x_4210E5, eax, ecx, 0x20)
+SIDEBAR_X_STUB(stub_x_421115, edx, eax, 0x1C)
+
 // ---------------------------------------------------------------------------
 // VERSION.dll replacements: the game imports these three; pass them through.
 static FARPROC real_version(const char *name)
@@ -466,6 +489,18 @@ BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved)
         }
         // Independent of the menu/video hooks: only touches the camera in battles.
         patch_call(0x43B770, stub_render, sizeof render, render);
+
+        // Sidebar objects with a hard-coded 640x480 position (mov dword ptr [reg+0x10], imm32).
+        {
+            static const unsigned char x608_ebx[] = { 0xC7, 0x43, 0x10, 0x00, 0x60, 0x02, 0x00 };
+            static const unsigned char x612_esi[] = { 0xC7, 0x46, 0x10, 0x00, 0x64, 0x02, 0x00 };
+            static const unsigned char x608_eax[] = { 0xC7, 0x40, 0x10, 0x00, 0x60, 0x02, 0x00 };
+            static const unsigned char x612_edx[] = { 0xC7, 0x42, 0x10, 0x00, 0x64, 0x02, 0x00 };
+            patch_call(0x401C8E, stub_x_401C8E, 7, x608_ebx);
+            patch_call(0x401CAC, stub_x_401CAC, 7, x612_esi);
+            patch_call(0x4210E5, stub_x_4210E5, 7, x608_eax);
+            patch_call(0x421115, stub_x_421115, 7, x612_edx);
+        }
         logf("KKNDHiResolutionMod loaded, menu/video hooks %s\n",
              !ok ? "NOT installed (unexpected exe)" : center ? "installed" : "off (disabled in launcher)");
     }

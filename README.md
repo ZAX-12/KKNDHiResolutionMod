@@ -56,6 +56,7 @@ three version functions through to the real `System32\version.dll`. At load time
 | Address    | Original                    | Hook                                        |
 |------------|-----------------------------|---------------------------------------------|
 | `0x43B770` | `call 0x412190`             | clamp the camera (always on)                |
+| `0x401C8E`, `0x401CAC`, `0x4210E5`, `0x421115` | `mov [reg+0x10], 608/612 << 8` | place two sidebar objects relative to the view width (always on) |
 | `0x412419` | `mov edx, [lpSurface]`      | give the game a private frame buffer        |
 | `0x412452` | `mov eax, [backbuffer]`     | compose the buffer onto the surface         |
 | `0x4285E8` | `call [ScreenToClient]`     | map the mouse into the 640x480 menu         |
@@ -63,7 +64,14 @@ three version functions through to the real `System32\version.dll`. At load time
 | `0x422A47`, `0x422CA2`, `0x42327E`, `0x446ED0`, `0x446D18` | `mov reg, [view width]` | fit the battlefield view to small maps |
 
 The menu/video hooks and the view fit are only installed with "Center menus and scale videos" on. The
-camera clamp is always on.
+camera clamp and the sidebar position fix are always on.
+
+#### Sidebar objects with a hard-coded position
+
+Most of the sidebar is placed at view width − 32, but one slot (y=288) and its icon (y=312) are created
+with the fixed x of the original 640x480 game: 608 and 612. At any other resolution that slot floated in
+the middle of the battlefield, for example after loading a saved game. The four instructions that write
+those constants are replaced with calls that compute width − 32 and width − 28.
 
 #### Playfield fit for small maps
 
