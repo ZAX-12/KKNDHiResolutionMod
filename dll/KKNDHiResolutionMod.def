@@ -1,4 +1,4 @@
-LIBRARY KRESMOD
+LIBRARY KKNDHiResolutionMod
 EXPORTS
     GetFileVersionInfoSizeA=K_GetFileVersionInfoSizeA
     GetFileVersionInfoA=K_GetFileVersionInfoA

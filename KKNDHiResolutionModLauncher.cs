@@ -1,4 +1,4 @@
-// KKND Xtreme Resolution Launcher
+// KKNDHiResolutionMod launcher
 // Patches a copy of KKNDgame.exe (the original is never modified) so the game
 // renders at a selectable resolution, then launches it.
 //
@@ -13,7 +13,7 @@
 // Everything else in the engine reads the size from these variables.
 //
 // With "center menus and scale videos" on, the VERSION.dll import is also renamed
-// to KRESMOD.dll (dll\kresmod.c), which hooks the game's frame routine.
+// to KKNDHiResolutionMod.dll (dll\KKNDHiResolutionMod.c), which hooks the game's frame routine.
 
 using System;
 using System.Diagnostics;
@@ -28,10 +28,17 @@ static class Program
     // Must live in the game folder: Windows loads ddraw.dll from the exe's own
     // folder, and without GOG's wrapper the game switches the real display mode.
     const string PatchedExe = "KKNDgame_hires.exe";
-    const string IniFile = "KKNDResMod.ini";
+    const string IniFile = "KKNDHiResolutionMod.ini";
     // Copied next to the patched exe (DLLs are loaded from the exe's folder).
-    const string HookDll = "KRESMOD.dll";
-    const int VersionImportOffset = 0x767FA;   // "VERSION.dll" in the import table
+    const string HookDll = "KKNDHiResolutionMod.dll";
+    // Import table layout (.idata: RVA 0x80000, file offset 0x75A00, virtual size 0xE82, raw size 0x1000).
+    const int VersionImportOffset = 0x767FA;   // "VERSION.dll" string (RVA 0x80DFA)
+    const uint VersionNameRva = 0x80DFA;
+    const int VersionDescriptorName = 0x75AAC; // Name field of the VERSION.dll import descriptor
+    const int IdataRaw = 0x75A00;
+    const int IdataVirtualSize = 0x1F8;        // .idata section header: VirtualSize
+    const int NewNameOffset = 0x76890;         // free zero bytes after the import data (RVA 0x80E90)
+    const uint NewNameRva = 0x80E90;
 
     public const int MinWidth = 640, MinHeight = 480;
 
@@ -107,7 +114,7 @@ static class Program
         {
             try
             {
-                File.WriteAllText(PathOf(), "[KKNDResMod]\r\nresolution=" + Resolution.Width + "x" + Resolution.Height +
+                File.WriteAllText(PathOf(), "[KKNDHiResolutionMod]\r\nresolution=" + Resolution.Width + "x" + Resolution.Height +
                                             "\r\nscale=" + Scale + "\r\ncenter_menus=" + (CenterMenus ? 1 : 0) + "\r\n");
             }
             catch { }
@@ -175,13 +182,20 @@ static class Program
 
                 if (centerMenus)
                 {
-                    // Load KRESMOD.dll instead of VERSION.dll (same name length; it forwards VERSION.dll).
-                    byte[] from = System.Text.Encoding.ASCII.GetBytes("VERSION.dll");
-                    byte[] to = System.Text.Encoding.ASCII.GetBytes(HookDll);
-                    for (int i = 0; i < from.Length; i++)
-                        if (data[VersionImportOffset + i] != from[i])
-                            throw new Exception("KKNDgame.exe has an unexpected import table. Nothing was changed.");
-                    to.CopyTo(data, VersionImportOffset);
+                    // Load KKNDHiResolutionMod.dll instead of VERSION.dll (it passes VERSION.dll through).
+                    // The new name is longer, so it goes into the unused tail of the .idata
+                    // section and the import descriptor is pointed at it.
+                    byte[] oldName = System.Text.Encoding.ASCII.GetBytes("VERSION.dll\0");
+                    byte[] newName = System.Text.Encoding.ASCII.GetBytes(HookDll + "\0");
+                    bool ok = BitConverter.ToUInt32(data, VersionDescriptorName) == VersionNameRva &&
+                              BitConverter.ToUInt32(data, IdataVirtualSize) == 0xE82;
+                    for (int i = 0; ok && i < oldName.Length; i++) ok = data[VersionImportOffset + i] == oldName[i];
+                    for (int i = 0; ok && i < newName.Length; i++) ok = data[NewNameOffset + i] == 0;
+                    if (!ok)
+                        throw new Exception("KKNDgame.exe has an unexpected import table. Nothing was changed.");
+                    newName.CopyTo(data, NewNameOffset);
+                    BitConverter.GetBytes(NewNameRva).CopyTo(data, VersionDescriptorName);
+                    BitConverter.GetBytes((uint)(NewNameOffset - IdataRaw + newName.Length)).CopyTo(data, IdataVirtualSize);
 
                     string dllSrc = Path.Combine(ModDir, HookDll), dllDst = Path.Combine(GameDir, HookDll);
                     if (!File.Exists(dllSrc))
@@ -202,7 +216,7 @@ static class Program
         }
         catch (Exception ex)
         {
-            MessageBox.Show(owner, ex.Message, "KKND Xtreme Resolution Mod", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            MessageBox.Show(owner, ex.Message, "KKNDHiResolutionMod", MessageBoxButtons.OK, MessageBoxIcon.Error);
             return false;
         }
     }
@@ -230,7 +244,7 @@ class LauncherForm : Form
 
     public LauncherForm()
     {
-        Text = "KKND Xtreme - Resolution";
+        Text = "KKNDHiResolutionMod - KKND Xtreme";
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false; MinimizeBox = false;
         StartPosition = FormStartPosition.CenterScreen;

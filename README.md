@@ -1,20 +1,20 @@
-# KKND Xtreme Resolution Mod
+# KKNDHiResolutionMod
 
 Play the GOG release of KKND Xtreme (1997) at higher resolutions than the original 640x480,
 with menus centered on screen and videos scaled up to fit.
 
 ## Usage
 
-1. Put this folder inside the game folder (`...\KKND Xtreme\KKNDResMod\`).
-2. Run `build.cmd` once. It needs Visual Studio's C++ tools (x86) for `KRESMOD.dll`.
-3. Run `KKND Resolution Launcher.exe` and choose:
+1. Put this folder inside the game folder (`...\KKND Xtreme\KKNDHiResolutionMod\`).
+2. Run `build.cmd` once. It needs Visual Studio's C++ tools (x86) for `KKNDHiResolutionMod.dll`.
+3. Run `KKNDHiResolutionMod.exe` and choose:
    - **Resolution**: the screen size to fill. Pick from the list or type any size, e.g. `1600x900`.
    - **Scale**: x1, x2, x3 ... up to the largest scale that keeps the game at 640x480 or more.
    - **Center menus and scale videos to fit the screen**: on by default.
 
    The game renders at *resolution / scale*. The dialog shows the result before you press Play.
    Higher scale = bigger units, less of the map on screen.
-4. Your choice is saved to `KKNDResMod.ini`. Add `-play` to a shortcut of the launcher to skip
+4. Your choice is saved to `KKNDHiResolutionMod.ini`. Add `-play` to a shortcut of the launcher to skip
    the dialog and start with the saved settings.
 
 Example on a 3440x1440 screen: x2 renders at 1720x720, so each game pixel becomes 2x2 screen pixels.
@@ -43,9 +43,9 @@ The rest of the engine reads the size from the variables these values set. Befor
 checks the original bytes and refuses to patch an unexpected exe version. Game widths are rounded down to
 a multiple of 8.
 
-### Centered menus and scaled videos (`dll\kresmod.c`)
+### Centered menus and scaled videos (`dll\KKNDHiResolutionMod.c`)
 
-The launcher renames the exe's `VERSION.dll` import to `KRESMOD.dll` and copies the DLL next to it.
+The launcher renames the exe's `VERSION.dll` import to `KKNDHiResolutionMod.dll` and copies the DLL next to it.
 The DLL passes the three version functions through to the real `System32\version.dll`. At load time it
 patches four call sites:
 
@@ -65,7 +65,7 @@ unlock, flip. Before unlock, the DLL classifies the frame from its visible layer
 - **Menu**: everything else (main menu, mission select, briefing, credits). The 640x480 screen is
   centered and the rest cleared to black.
 
-Mode changes are logged to `KRESMOD.log` in the game folder.
+Mode changes are logged to `KKNDHiResolutionMod.log` in the game folder.
 
 ## Known limitations
 
@@ -79,4 +79,4 @@ Mode changes are logged to `KRESMOD.log` in the game folder.
 
 ## Uninstall
 
-Delete this folder, plus `KKNDgame_hires.exe`, `KRESMOD.dll` and `KRESMOD.log` from the game folder.
+Delete this folder, plus `KKNDgame_hires.exe`, `KKNDHiResolutionMod.dll` and `KKNDHiResolutionMod.log` from the game folder.

@@ -1,4 +1,4 @@
-// KRESMOD.dll - loaded by the patched KKNDgame_hires.exe in place of VERSION.dll
+// KKNDHiResolutionMod.dll - loaded by the patched KKNDgame_hires.exe in place of VERSION.dll
 // (the three VERSION.dll functions the game uses are passed through below).
 //
 // The game draws every frame through one routine (0x4122D0):
@@ -265,7 +265,7 @@ BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved)
         DisableThreadLibraryCalls(inst);
         GetModuleFileNameA(inst, path, MAX_PATH);
         slash = strrchr(path, '\\');
-        if (slash) strcpy(slash + 1, "KRESMOD.log");
+        if (slash) strcpy(slash + 1, "KKNDHiResolutionMod.log");
         g_log = fopen(path, "w");
         g_t0 = GetTickCount();
 
@@ -277,7 +277,7 @@ BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved)
             patch_call(0x4285E8, my_screen_to_client, sizeof s2c, s2c);
             patch_call(0x428413, my_client_to_screen, sizeof c2s, c2s);
         }
-        logf("KRESMOD loaded, hooks %s\n", ok ? "installed" : "NOT installed (unexpected exe)");
+        logf("KKNDHiResolutionMod loaded, hooks %s\n", ok ? "installed" : "NOT installed (unexpected exe)");
     }
     return TRUE;
 }
