@@ -45,18 +45,34 @@ The rest of the engine reads the size from the variables these values set. Befor
 checks the original bytes and refuses to patch an unexpected exe version. Game widths are rounded down to
 a multiple of 8.
 
-### Centered menus and scaled videos (`dll\KKNDHiResolutionMod.c`)
+### The companion DLL (`dll\KKNDHiResolutionMod.c`)
 
 The launcher renames the exe's `VERSION.dll` import to `KKNDHiResolutionMod.dll` and copies the DLL next to it.
-The DLL passes the three version functions through to the real `System32\version.dll`. At load time it
-patches four call sites:
+The new name is longer than the old one, so it is written into the unused tail of the `.idata` section
+(RVA `0x80E90`) and the import descriptor is pointed at it. After it, at RVA `0x80EB0`, the launcher writes
+the DLL's settings: `"KHRM"` plus a flags dword (bit 0 = center menus and scale videos). The DLL passes the
+three version functions through to the real `System32\version.dll`. At load time it patches these call sites:
 
 | Address    | Original                    | Hook                                        |
 |------------|-----------------------------|---------------------------------------------|
+| `0x43B770` | `call 0x412190`             | clamp the camera (always on)                |
 | `0x412419` | `mov edx, [lpSurface]`      | give the game a private frame buffer        |
 | `0x412452` | `mov eax, [backbuffer]`     | compose the buffer onto the surface         |
 | `0x4285E8` | `call [ScreenToClient]`     | map the mouse into the 640x480 menu         |
 | `0x428413` | `call [ClientToScreen]`     | inverse mapping for cursor warps            |
+
+#### Camera clamp
+
+The camera is at `0x47C380`/`0x47C384` (24.8 fixed point). The game clamps it to
+`[0, (map size - view size) << 8]`. When the map is smaller than the view, that range is negative and some of
+its scroll routines leave the camera far outside the map, e.g. a 1600x1280 map in a 1720x720 view started at
+(958,788), showing mostly empty space. The render driver `0x43B770` first asks every layer to recompute its
+screen position from the camera, then draws. The hook clamps the camera at its start, so each frame is
+positioned from a valid camera and the corrected value persists. An axis where the map is smaller than the
+view is pinned to 0 (map against the left or top edge): the game never had negative camera values, so the
+mod doesn't create any.
+
+#### Centered menus and scaled videos
 
 All drawing goes through one frame routine (`0x4122D0`): lock the back buffer, run the layer callbacks,
 unlock, flip. Before unlock, the DLL classifies the frame from its visible layers:
@@ -67,7 +83,7 @@ unlock, flip. Before unlock, the DLL classifies the frame from its visible layer
 - **Menu**: everything else (main menu, mission select, briefing, credits). The 640x480 screen is
   centered and the rest cleared to black.
 
-Mode changes are logged to `KKNDHiResolutionMod.log` in the game folder.
+Mode changes and camera corrections (once per map) are logged to `KKNDHiResolutionMod.log` in the game folder.
 
 ## Known limitations
 
@@ -75,7 +91,8 @@ Mode changes are logged to `KKNDHiResolutionMod.log` in the game folder.
   horizontally but keeps it near the top.
 - The build sidebar keeps its original 15 slots.
 - Videos are scaled with nearest neighbour. At non-integer scales (e.g. 1.5x) pixel sizes vary slightly.
-- At very large game sizes, small maps fit entirely on screen, with black space beyond the edges.
+- When a map is smaller than the view, it sits against the left or top edge, with black space beyond its
+  right or bottom edge.
 - A Windows Firewall prompt may appear the first time `KKNDgame_hires.exe` runs, because the game has
   LAN multiplayer. Allow it only if you want to play over LAN.
 

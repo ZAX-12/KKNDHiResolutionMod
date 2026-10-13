@@ -150,6 +150,51 @@ static void __cdecl compose(void *head)
 }
 
 // ---------------------------------------------------------------------------
+// Camera clamp. The game keeps the camera (24.8 fixed point) inside
+// [0, (map size - view size) << 8], but when the map is smaller than the view
+// that range is negative and several of its scroll routines then leave the
+// camera far outside the map - the screen shows mostly empty space. Before each
+// frame's screen positions are computed (start of the render driver 0x43B770)
+// we clamp it properly. An axis where the map is smaller than the view is
+// pinned to 0: the game never had negative camera values, so we don't create any.
+#define G_CAMERA_X (*(int *)0x47C380)
+#define G_CAMERA_Y (*(int *)0x47C384)
+#define G_VIEW_W   (*(int *)0x478A8C)
+#define G_VIEW_H   (*(int *)0x478A88)
+#define G_SCENE    (*(unsigned char **)0x47A010)   // +8: map layer node (layer object at +0x14)
+
+static int clamp_axis(int cam, int map, int view)
+{
+    int max = map > view ? (map - view) << 8 : 0;
+    return cam < 0 ? 0 : cam > max ? max : cam;
+}
+
+static void __cdecl clamp_camera(void)
+{
+    static int lastMapW, lastMapH;
+    __try {
+        unsigned char *scene = G_SCENE, *node;
+        int *d, mapW, mapH, viewW, viewH, x, y;
+        if (!scene || !(node = *(unsigned char **)(scene + 8))) return;
+        d = *(int **)(node + 0x18);
+        if (!d || d[0] != LAYER_TILEMAP) return;
+        mapW = d[1] * d[3]; mapH = d[2] * d[4];
+        if (!(mapW > 800 || mapH > 1024)) return;          // not a battle map
+        viewW = G_VIEW_W & 0xFFFFFF; viewH = G_VIEW_H & 0xFFFFFF;
+        x = clamp_axis(G_CAMERA_X, mapW, viewW);
+        y = clamp_axis(G_CAMERA_Y, mapH, viewH);
+        if (mapW != lastMapW || mapH != lastMapH) {
+            logf("[%7lu ms] map %dx%d, view %dx%d, camera (%d,%d) -> (%d,%d)\n", GetTickCount() - g_t0,
+                 mapW, mapH, viewW, viewH, G_CAMERA_X >> 8, G_CAMERA_Y >> 8, x >> 8, y >> 8);
+            lastMapW = mapW; lastMapH = mapH;
+        }
+        G_CAMERA_X = x;
+        G_CAMERA_Y = y;
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Mouse. The game reads the cursor with GetCursorPos + ScreenToClient (0x4285E8)
 // and warps it with ClientToScreen + SetCursorPos (0x428413).
 static int clampi(int v, int lo, int hi) { return v < lo ? lo : v > hi ? hi : v; }
@@ -202,6 +247,17 @@ __declspec(naked) static void stub_compose(void)      // replaces: mov eax, [0x4
         popad
         mov eax, dword ptr ds:[0x4798D8]
         ret
+    }
+}
+
+__declspec(naked) static void stub_render(void)       // replaces: call 0x412190 (start of 0x43B770)
+{
+    __asm {
+        pushad
+        call clamp_camera
+        popad
+        mov eax, 0x412190        // continue into the original call; it returns to 0x43B775
+        jmp eax
     }
 }
 
@@ -260,8 +316,9 @@ BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved)
         static const unsigned char unlock[]   = { 0xA1, 0xD8, 0x98, 0x47, 0x00 };       // mov eax, [0x4798D8]
         static const unsigned char s2c[]      = { 0xFF, 0x15, 0xB4, 0x04, 0x48, 0x00 }; // call [ScreenToClient]
         static const unsigned char c2s[]      = { 0xFF, 0x15, 0xCC, 0x04, 0x48, 0x00 }; // call [ClientToScreen]
+        static const unsigned char render[]   = { 0xE8, 0x1B, 0x6A, 0xFD, 0xFF };       // call 0x412190 @ 0x43B770
         char path[MAX_PATH], *slash;
-        int ok;
+        int ok, center;
         DisableThreadLibraryCalls(inst);
         GetModuleFileNameA(inst, path, MAX_PATH);
         slash = strrchr(path, '\\');
@@ -269,15 +326,21 @@ BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved)
         g_log = fopen(path, "w");
         g_t0 = GetTickCount();
 
+        // Settings written by the launcher after our import name: "KHRM", flags (bit 0 = center menus).
+        center = !(memcmp((void *)0x480EB0, "KHRM", 4) == 0 && !(*(unsigned *)0x480EB4 & 1));
+
         // The buffer swap and the compose step only make sense together.
         ok = !memcmp((void *)0x412419, lock_ptr, sizeof lock_ptr) && !memcmp((void *)0x412452, unlock, sizeof unlock);
-        if (ok) {
+        if (ok && center) {
             patch_call(0x412419, stub_get_buffer, sizeof lock_ptr, lock_ptr);
             patch_call(0x412452, stub_compose, sizeof unlock, unlock);
             patch_call(0x4285E8, my_screen_to_client, sizeof s2c, s2c);
             patch_call(0x428413, my_client_to_screen, sizeof c2s, c2s);
         }
-        logf("KKNDHiResolutionMod loaded, hooks %s\n", ok ? "installed" : "NOT installed (unexpected exe)");
+        // Independent of the menu/video hooks: only touches the camera in battles.
+        patch_call(0x43B770, stub_render, sizeof render, render);
+        logf("KKNDHiResolutionMod loaded, menu/video hooks %s\n",
+             !ok ? "NOT installed (unexpected exe)" : center ? "installed" : "off (disabled in launcher)");
     }
     return TRUE;
 }

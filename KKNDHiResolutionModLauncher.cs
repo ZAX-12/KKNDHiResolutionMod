@@ -12,8 +12,9 @@
 //   0x0D79B  mov ecx, 480   -> game viewport height  (@ 0x40E39B)
 // Everything else in the engine reads the size from these variables.
 //
-// With "center menus and scale videos" on, the VERSION.dll import is also renamed
-// to KKNDHiResolutionMod.dll (dll\KKNDHiResolutionMod.c), which hooks the game's frame routine.
+// The VERSION.dll import is also renamed to KKNDHiResolutionMod.dll
+// (dll\KKNDHiResolutionMod.c). It keeps the camera inside small maps and, with
+// "center menus and scale videos" on, hooks the game's frame routine.
 
 using System;
 using System.Diagnostics;
@@ -39,6 +40,7 @@ static class Program
     const int IdataVirtualSize = 0x1F8;        // .idata section header: VirtualSize
     const int NewNameOffset = 0x76890;         // free zero bytes after the import data (RVA 0x80E90)
     const uint NewNameRva = 0x80E90;
+    const int ConfigOffset = 0x768B0;          // "KHRM" + flags for the DLL (RVA 0x80EB0; bit 0 = center menus)
 
     public const int MinWidth = 640, MinHeight = 480;
 
@@ -180,26 +182,29 @@ static class Program
                     BitConverter.GetBytes(v).CopyTo(data, off + 1);
                 }
 
-                if (centerMenus)
                 {
                     // Load KKNDHiResolutionMod.dll instead of VERSION.dll (it passes VERSION.dll through).
+                    // It always loads: it also keeps the camera inside maps smaller than the view.
                     // The new name is longer, so it goes into the unused tail of the .idata
-                    // section and the import descriptor is pointed at it.
+                    // section and the import descriptor is pointed at it. The DLL's settings
+                    // follow it there, so the patched exe behaves the same however it is started.
                     byte[] oldName = System.Text.Encoding.ASCII.GetBytes("VERSION.dll\0");
                     byte[] newName = System.Text.Encoding.ASCII.GetBytes(HookDll + "\0");
                     bool ok = BitConverter.ToUInt32(data, VersionDescriptorName) == VersionNameRva &&
                               BitConverter.ToUInt32(data, IdataVirtualSize) == 0xE82;
                     for (int i = 0; ok && i < oldName.Length; i++) ok = data[VersionImportOffset + i] == oldName[i];
-                    for (int i = 0; ok && i < newName.Length; i++) ok = data[NewNameOffset + i] == 0;
+                    for (int i = NewNameOffset; ok && i < ConfigOffset + 8; i++) ok = data[i] == 0;
                     if (!ok)
                         throw new Exception("KKNDgame.exe has an unexpected import table. Nothing was changed.");
                     newName.CopyTo(data, NewNameOffset);
                     BitConverter.GetBytes(NewNameRva).CopyTo(data, VersionDescriptorName);
-                    BitConverter.GetBytes((uint)(NewNameOffset - IdataRaw + newName.Length)).CopyTo(data, IdataVirtualSize);
+                    System.Text.Encoding.ASCII.GetBytes("KHRM").CopyTo(data, ConfigOffset);
+                    BitConverter.GetBytes(centerMenus ? 1u : 0u).CopyTo(data, ConfigOffset + 4);
+                    BitConverter.GetBytes((uint)(ConfigOffset + 8 - IdataRaw)).CopyTo(data, IdataVirtualSize);
 
                     string dllSrc = Path.Combine(ModDir, HookDll), dllDst = Path.Combine(GameDir, HookDll);
                     if (!File.Exists(dllSrc))
-                        throw new Exception(HookDll + " is missing from the mod folder. Run build.cmd, or untick \"Center menus and scale videos\".");
+                        throw new Exception(HookDll + " is missing from the mod folder. Run build.cmd.");
                     if (!File.Exists(dllDst) || !BytesEqual(File.ReadAllBytes(dllSrc), File.ReadAllBytes(dllDst)))
                         File.Copy(dllSrc, dllDst, true);
                 }
