@@ -6,7 +6,9 @@ with menus centered on screen and videos scaled up to fit.
 ## Usage
 
 1. Put this folder inside the game folder (`...\KKND Xtreme\KKNDHiResolutionMod\`).
-2. Run `build.cmd` once. It needs Visual Studio's C++ tools (x86) for `KKNDHiResolutionMod.dll`.
+2. The release zip already contains `KKNDHiResolutionMod.exe` and `KKNDHiResolutionMod.dll`. When building
+   from source, run `build.cmd` first. It needs Visual Studio's C++ tools (x86) for the DLL.
+   `build.cmd release` makes the release zip in `release\`.
 3. Run `KKNDHiResolutionMod.exe` and choose:
    - **Resolution**: the screen size to fill. Pick from the list or type any size, e.g. `1600x900`.
    - **Scale**: x1, x2, x3 ... up to the largest scale that keeps the game at 640x480 or more.
