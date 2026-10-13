@@ -60,6 +60,22 @@ three version functions through to the real `System32\version.dll`. At load time
 | `0x412452` | `mov eax, [backbuffer]`     | compose the buffer onto the surface         |
 | `0x4285E8` | `call [ScreenToClient]`     | map the mouse into the 640x480 menu         |
 | `0x428413` | `call [ClientToScreen]`     | inverse mapping for cursor warps            |
+| `0x422A47`, `0x422CA2`, `0x42327E`, `0x446ED0`, `0x446D18` | `mov reg, [view width]` | fit the battlefield view to small maps |
+
+The menu/video hooks and the view fit are only installed with "Center menus and scale videos" on. The
+camera clamp is always on.
+
+#### Playfield fit for small maps
+
+The battlefield view (`0x478A8C`/`0x478A88`) is the full game resolution, and the sidebar is placed at its
+right edge. On a map smaller than the view, the sidebar ended up beyond the map in empty space, and that
+area was never redrawn, so the cursor left trails there. At the mission setup sites that read the view width,
+the DLL shrinks the view to the map size, as in the original 640x480 game, where the map always filled the
+view. The full size is restored for larger maps; it comes from `0x478AA0`/`0x478A84`. The sidebar
+(15 slots + panel) is created at `0x4469F0` before the map is loaded, so it starts at the previous width.
+When the view width changes, the screen-anchored sprites in the right-edge column move with it (render
+lists at `0x47C5D8`/`0x47C5E8`, update callback `0x4483E0`, x at object `+0x10`). The compose step centers
+the smaller playfield on the screen and clears around it; the mouse is offset to match.
 
 #### Camera clamp
 
@@ -77,7 +93,8 @@ mod doesn't create any.
 All drawing goes through one frame routine (`0x4122D0`): lock the back buffer, run the layer callbacks,
 unlock, flip. Before unlock, the DLL classifies the frame from its visible layers:
 
-- **Gameplay**: a tile map larger than 800x1024 (a battle map). The frame is copied unchanged.
+- **Gameplay**: a tile map larger than 800x1024 (a battle map). The frame is copied unchanged, or centered
+  when the view was fitted to a small map.
 - **Video**: bitmap layers only. The 640x480 frame is scaled (nearest neighbour) to the largest 4:3 rect
   that fits, centered.
 - **Menu**: everything else (main menu, mission select, briefing, credits). The 640x480 screen is
@@ -91,8 +108,9 @@ Mode changes and camera corrections (once per map) are logged to `KKNDHiResoluti
   horizontally but keeps it near the top.
 - The build sidebar keeps its original 15 slots.
 - Videos are scaled with nearest neighbour. At non-integer scales (e.g. 1.5x) pixel sizes vary slightly.
-- When a map is smaller than the view, it sits against the left or top edge, with black space beyond its
-  right or bottom edge.
+- When a map is smaller than the view, the battlefield shrinks to the map and is centered, with black bars
+  around it. With "Center menus and scale videos" off, the map instead sits against the left or top edge
+  and the sidebar stays at the screen edge.
 - A Windows Firewall prompt may appear the first time `KKNDgame_hires.exe` runs, because the game has
   LAN multiplayer. Allow it only if you want to play over LAN.
 
