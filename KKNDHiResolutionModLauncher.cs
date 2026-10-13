@@ -210,8 +210,9 @@ class LauncherForm : Form
         result = new Label { Location = new Point(12, 72), Size = new Size(456, 44) };
         center = new CheckBox { Text = "Center menus and scale videos to fit the screen", Location = new Point(12, 122), AutoSize = true, Checked = true };
         play = new Button { Text = "Play", Location = new Point(292, 162), Size = new Size(85, 30) };
-        var cancel = new Button { Text = "Cancel", Location = new Point(383, 162), Size = new Size(85, 30), DialogResult = DialogResult.Cancel };
+        var cancel = new Button { Text = "Cancel", Location = new Point(383, 162), Size = new Size(85, 30) };
         play.Click += OnPlay;
+        cancel.Click += (s, e) => Close();
         AcceptButton = play;
         CancelButton = cancel;
         Controls.AddRange(new Control[] {
