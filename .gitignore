@@ -1,4 +1,6 @@
 # Build output and per-user settings
 *.exe
+*.dll
 *.pdb
+obj/
 KKNDResMod.ini

@@ -1,0 +1,5 @@
+LIBRARY KRESMOD
+EXPORTS
+    GetFileVersionInfoSizeA=K_GetFileVersionInfoSizeA
+    GetFileVersionInfoA=K_GetFileVersionInfoA
+    VerQueryValueA=K_VerQueryValueA

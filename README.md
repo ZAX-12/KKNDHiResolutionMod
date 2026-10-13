@@ -1,14 +1,16 @@
 # KKND Xtreme Resolution Mod
 
-Play the GOG release of KKND Xtreme (1997) at higher resolutions than the original 640x480.
+Play the GOG release of KKND Xtreme (1997) at higher resolutions than the original 640x480,
+with menus centered on screen and videos scaled up to fit.
 
 ## Usage
 
 1. Put this folder inside the game folder (`...\KKND Xtreme\KKNDResMod\`).
-2. Run `build.cmd` once, unless `KKND Resolution Launcher.exe` already exists.
+2. Run `build.cmd` once. It needs Visual Studio's C++ tools (x86) for `KRESMOD.dll`.
 3. Run `KKND Resolution Launcher.exe` and choose:
    - **Resolution**: the screen size to fill. Pick from the list or type any size, e.g. `1600x900`.
    - **Scale**: x1, x2, x3 ... up to the largest scale that keeps the game at 640x480 or more.
+   - **Center menus and scale videos to fit the screen**: on by default.
 
    The game renders at *resolution / scale*. The dialog shows the result before you press Play.
    Higher scale = bigger units, less of the map on screen.
@@ -26,6 +28,8 @@ The patched exe must live in the game folder. Windows loads `ddraw.dll` from the
 GOG's bundled `ddraw.dll` wrapper scales the picture to your monitor. Without it, the game switches
 the real display mode.
 
+### Resolution
+
 Patch sites in the GOG `KKNDgame.exe` (MD5 `a0e8168be9da8de13a28b36f94977539`):
 
 | File offset | Instruction    | Meaning               |
@@ -39,15 +43,40 @@ The rest of the engine reads the size from the variables these values set. Befor
 checks the original bytes and refuses to patch an unexpected exe version. Game widths are rounded down to
 a multiple of 8.
 
+### Centered menus and scaled videos (`dll\kresmod.c`)
+
+The launcher renames the exe's `VERSION.dll` import to `KRESMOD.dll` and copies the DLL next to it.
+The DLL passes the three version functions through to the real `System32\version.dll`. At load time it
+patches four call sites:
+
+| Address    | Original                    | Hook                                        |
+|------------|-----------------------------|---------------------------------------------|
+| `0x412419` | `mov edx, [lpSurface]`      | give the game a private frame buffer        |
+| `0x412452` | `mov eax, [backbuffer]`     | compose the buffer onto the surface         |
+| `0x4285E8` | `call [ScreenToClient]`     | map the mouse into the 640x480 menu         |
+| `0x428413` | `call [ClientToScreen]`     | inverse mapping for cursor warps            |
+
+All drawing goes through one frame routine (`0x4122D0`): lock the back buffer, run the layer callbacks,
+unlock, flip. Before unlock, the DLL classifies the frame from its visible layers:
+
+- **Gameplay**: a tile map larger than 800x1024 (a battle map). The frame is copied unchanged.
+- **Video**: bitmap layers only. The 640x480 frame is scaled (nearest neighbour) to the largest 4:3 rect
+  that fits, centered.
+- **Menu**: everything else (main menu, mission select, briefing, credits). The 640x480 screen is
+  centered and the rest cleared to black.
+
+Mode changes are logged to `KRESMOD.log` in the game folder.
+
 ## Known limitations
 
-- Menus, briefings and videos are still drawn at 640x480 in the top-left corner. Only the battlefield
-  uses the higher resolution.
+- The in-game options menu (Esc during a mission) is drawn over the map. The game centers it
+  horizontally but keeps it near the top.
 - The build sidebar keeps its original 15 slots.
+- Videos are scaled with nearest neighbour. At non-integer scales (e.g. 1.5x) pixel sizes vary slightly.
 - At very large game sizes, small maps fit entirely on screen, with black space beyond the edges.
 - A Windows Firewall prompt may appear the first time `KKNDgame_hires.exe` runs, because the game has
   LAN multiplayer. Allow it only if you want to play over LAN.
 
 ## Uninstall
 
-Delete this folder and `KKNDgame_hires.exe` from the game folder.
+Delete this folder, plus `KKNDgame_hires.exe`, `KRESMOD.dll` and `KRESMOD.log` from the game folder.

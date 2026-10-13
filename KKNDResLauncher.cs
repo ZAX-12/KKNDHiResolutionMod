@@ -11,6 +11,9 @@
 //   0x0D796  mov eax, 640   -> game viewport width   (@ 0x40E396)
 //   0x0D79B  mov ecx, 480   -> game viewport height  (@ 0x40E39B)
 // Everything else in the engine reads the size from these variables.
+//
+// With "center menus and scale videos" on, the VERSION.dll import is also renamed
+// to KRESMOD.dll (dll\kresmod.c), which hooks the game's frame routine.
 
 using System;
 using System.Diagnostics;
@@ -26,6 +29,9 @@ static class Program
     // folder, and without GOG's wrapper the game switches the real display mode.
     const string PatchedExe = "KKNDgame_hires.exe";
     const string IniFile = "KKNDResMod.ini";
+    // Copied next to the patched exe (DLLs are loaded from the exe's folder).
+    const string HookDll = "KRESMOD.dll";
+    const int VersionImportOffset = 0x767FA;   // "VERSION.dll" in the import table
 
     public const int MinWidth = 640, MinHeight = 480;
 
@@ -60,7 +66,7 @@ static class Program
             Settings s = Settings.Load();
             Size game;
             if (s != null && GameSize(s.Resolution, s.Scale, out game) == null)
-                return Launch(game, null) ? 0 : 1;
+                return Launch(game, s.CenterMenus, null) ? 0 : 1;
         }
 
         Application.EnableVisualStyles();
@@ -72,6 +78,7 @@ static class Program
     {
         public Size Resolution;
         public int Scale = 1;
+        public bool CenterMenus = true;
 
         static string PathOf() { return Path.Combine(ModDir, IniFile); }
 
@@ -88,6 +95,7 @@ static class Program
                     string key = kv[0].Trim().ToLowerInvariant();
                     if (key == "resolution" && TryParse(kv[1], out s.Resolution)) any = true;
                     if (key == "scale") int.TryParse(kv[1].Trim(), out s.Scale);
+                    if (key == "center_menus") s.CenterMenus = kv[1].Trim() != "0";
                 }
                 if (s.Scale < 1) s.Scale = 1;
                 return any ? s : null;
@@ -100,7 +108,7 @@ static class Program
             try
             {
                 File.WriteAllText(PathOf(), "[KKNDResMod]\r\nresolution=" + Resolution.Width + "x" + Resolution.Height +
-                                            "\r\nscale=" + Scale + "\r\n");
+                                            "\r\nscale=" + Scale + "\r\ncenter_menus=" + (CenterMenus ? 1 : 0) + "\r\n");
             }
             catch { }
         }
@@ -144,7 +152,7 @@ static class Program
         return null;
     }
 
-    public static bool Launch(Size game, IWin32Window owner)
+    public static bool Launch(Size game, bool centerMenus, IWin32Window owner)
     {
         try
         {
@@ -163,6 +171,23 @@ static class Program
                                             "Mismatch at file offset 0x" + off.ToString("X") + ". Nothing was changed.");
                     uint v = (bool)site[3] ? (uint)game.Width : (uint)game.Height;
                     BitConverter.GetBytes(v).CopyTo(data, off + 1);
+                }
+
+                if (centerMenus)
+                {
+                    // Load KRESMOD.dll instead of VERSION.dll (same name length; it forwards VERSION.dll).
+                    byte[] from = System.Text.Encoding.ASCII.GetBytes("VERSION.dll");
+                    byte[] to = System.Text.Encoding.ASCII.GetBytes(HookDll);
+                    for (int i = 0; i < from.Length; i++)
+                        if (data[VersionImportOffset + i] != from[i])
+                            throw new Exception("KKNDgame.exe has an unexpected import table. Nothing was changed.");
+                    to.CopyTo(data, VersionImportOffset);
+
+                    string dllSrc = Path.Combine(ModDir, HookDll), dllDst = Path.Combine(GameDir, HookDll);
+                    if (!File.Exists(dllSrc))
+                        throw new Exception(HookDll + " is missing from the mod folder. Run build.cmd, or untick \"Center menus and scale videos\".");
+                    if (!File.Exists(dllDst) || !BytesEqual(File.ReadAllBytes(dllSrc), File.ReadAllBytes(dllDst)))
+                        File.Copy(dllSrc, dllDst, true);
                 }
                 exe = Path.Combine(GameDir, PatchedExe);
                 if (!File.Exists(exe) || !BytesEqual(File.ReadAllBytes(exe), data))
@@ -199,6 +224,7 @@ class LauncherForm : Form
         new[]{3840,2160}, new[]{5120,1440}, new[]{5120,2160}, new[]{7680,4320} };
 
     ComboBox resCombo, scaleCombo;
+    CheckBox center;
     Label result;
     Button play;
 
@@ -209,7 +235,7 @@ class LauncherForm : Form
         MaximizeBox = false; MinimizeBox = false;
         StartPosition = FormStartPosition.CenterScreen;
         AutoScaleMode = AutoScaleMode.Dpi;
-        ClientSize = new Size(480, 178);
+        ClientSize = new Size(480, 206);
         Font = new Font("Segoe UI", 9f);
         try { Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath); } catch { }
 
@@ -228,11 +254,13 @@ class LauncherForm : Form
 
         result = new Label { Location = new Point(12, 72), Size = new Size(456, 44) };
 
-        play = new Button { Text = "Play", Location = new Point(292, 134), Size = new Size(85, 30) };
-        var cancel = new Button { Text = "Cancel", Location = new Point(383, 134), Size = new Size(85, 30), DialogResult = DialogResult.Cancel };
+        center = new CheckBox { Text = "Center menus and scale videos to fit the screen", Location = new Point(12, 122), AutoSize = true, Checked = true };
+
+        play = new Button { Text = "Play", Location = new Point(292, 162), Size = new Size(85, 30) };
+        var cancel = new Button { Text = "Cancel", Location = new Point(383, 162), Size = new Size(85, 30), DialogResult = DialogResult.Cancel };
         play.Click += OnPlay;
         AcceptButton = play; CancelButton = cancel;
-        Controls.AddRange(new Control[] { resLabel, scaleLabel, resCombo, scaleCombo, result, play, cancel });
+        Controls.AddRange(new Control[] { resLabel, scaleLabel, resCombo, scaleCombo, result, center, play, cancel });
 
         // Restore saved settings (default: your screen at x2).
         Program.Settings saved = Program.Settings.Load();
@@ -247,6 +275,7 @@ class LauncherForm : Form
                 if (Program.TryParse(resCombo.Items[i].ToString(), out item) && item == saved.Resolution) { found = i; break; }
             if (found >= 0) resCombo.SelectedIndex = found; else resCombo.Text = key;
             wantScale = saved.Scale;
+            center.Checked = saved.CenterMenus;
         }
         RebuildScales(wantScale);
 
@@ -304,7 +333,7 @@ class LauncherForm : Form
     {
         Size res, game;
         if (!Program.TryParse(resCombo.Text, out res) || Program.GameSize(res, SelectedScale(), out game) != null) return;
-        new Program.Settings { Resolution = res, Scale = SelectedScale() }.Save();
-        if (Program.Launch(game, this)) Close();
+        new Program.Settings { Resolution = res, Scale = SelectedScale(), CenterMenus = center.Checked }.Save();
+        if (Program.Launch(game, center.Checked, this)) Close();
     }
 }
