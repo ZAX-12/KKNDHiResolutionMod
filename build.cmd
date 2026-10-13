@@ -8,7 +8,7 @@ rem   build.cmd release   clean build without the game's icon, packaged as
 rem                       release\KKNDHiResolutionMod-%VERSION%.zip
 setlocal
 cd /d "%~dp0"
-set VERSION=1.0
+set VERSION=1.0.1
 set RELEASE=
 if /i "%~1"=="release" set RELEASE=1
 
